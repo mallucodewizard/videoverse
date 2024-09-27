@@ -99,12 +99,29 @@ def merge_videos(request):
     for video_id in video_ids:
         try:
             video = Video.objects.get(pk=video_id)
-            clips.append(VideoFileClip(video.file.path))
+            clip = VideoFileClip(video.file.path)
+
+            # Optionally ensure all clips have the same resolution (you can hardcode resolution)
+            clip = clip.resize(height=720)  # Set a uniform height (width will adjust proportionally)
+
+            clips.append(clip)
         except Video.DoesNotExist:
             return Response({"error": f"Video with id {video_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": f"Error loading video {video_id}: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    merged_clip = concatenate_videoclips(clips)
-    output_path = os.path.join(settings.MEDIA_ROOT, "merged_output.mp4")
-    merged_clip.write_videofile(output_path, codec="libx264")
+    try:
+        # Safely concatenate clips using 'compose' method
+        merged_clip = concatenate_videoclips(clips, method="compose")
+
+        output_dir = os.path.join(settings.MEDIA_ROOT, "merged_videos")
+        os.makedirs(output_dir, exist_ok=True)
+        output_path = os.path.join(output_dir, "merged_output.mp4")
+
+        # Write the merged video file
+        merged_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
+
+    except Exception as e:
+        return Response({"error": f"Error merging videos: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({"merged_video_url": output_path}, status=status.HTTP_200_OK)
