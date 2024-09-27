@@ -2,7 +2,7 @@ from rest_framework import status, serializers
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.conf import settings
-from datetime import datetime
+from datetime import timedelta, datetime
 from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
 from django.utils import timezone
 from .models import Video
@@ -152,5 +152,36 @@ def generate_shareable_link(request, video_id):
 
         return Response({"shareable_link": shareable_link}, status=status.HTTP_200_OK)
 
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+def access_shared_video(request, signed_value):
+    try:
+        # Validate the signed value
+        data = signer.unsign_object(signed_value, max_age=60*60*24)  # 24 hours expiry
+        video_id = data.get("video_id")
+        # Get expiry_time from request or default to 10 minutes from now
+        expiry_time = request.data.get('expiry_time')
+        
+        if not expiry_time:
+            # Default expiry time is 10 minutes from now
+            expiry_time = (timezone.now() + timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S')
+
+        if timezone.now() > timezone.make_aware(timezone.datetime.strptime(expiry_time, '%Y-%m-%dT%H:%M:%S')):
+            return Response({"error": "Link has expired."}, status=status.HTTP_400_BAD_REQUEST)
+
+        video = Video.objects.get(pk=video_id)
+        video_url = request.build_absolute_uri(video.file.url)
+
+        return Response({"video_url": video_url}, status=status.HTTP_200_OK)
+
+    except SignatureExpired:
+        return Response({"error": "Link has expired."}, status=status.HTTP_400_BAD_REQUEST)
+    except BadSignature:
+        return Response({"error": "Invalid link."}, status=status.HTTP_400_BAD_REQUEST)
+    except Video.DoesNotExist:
+        return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
