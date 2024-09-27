@@ -2,6 +2,9 @@ from rest_framework import status, serializers
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.conf import settings
+from datetime import datetime
+from django.core.signing import TimestampSigner, SignatureExpired, BadSignature
+from django.utils import timezone
 from .models import Video
 from .serializers import VideoSerializer
 from moviepy.editor import VideoFileClip,concatenate_videoclips
@@ -116,7 +119,9 @@ def merge_videos(request):
 
         output_dir = os.path.join(settings.MEDIA_ROOT, "merged_videos")
         os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, "merged_output.mp4")
+        # Generate a timestamp
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        output_path = os.path.join(output_dir, f"merged_output{timestamp}.mp4")
 
         # Write the merged video file
         merged_clip.write_videofile(output_path, codec="libx264", audio_codec="aac")
@@ -125,3 +130,27 @@ def merge_videos(request):
         return Response({"error": f"Error merging videos: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response({"merged_video_url": output_path}, status=status.HTTP_200_OK)
+
+
+signer = TimestampSigner()
+
+@api_view(['POST'])
+def generate_shareable_link(request, video_id):
+    try:
+        video = Video.objects.get(pk=video_id)
+    except Video.DoesNotExist:
+        return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    expiry_time = request.data.get('expiry_time', 10)  # Default
+    if not expiry_time:
+        return Response({"error": "Expiry time not provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Generate a signed URL with the video ID and expiry time
+        signed_value = signer.sign_object({"video_id": video_id, "expiry_time": expiry_time})
+        shareable_link = f"{request.build_absolute_uri('/api/videos/access/')}{signed_value}/"
+
+        return Response({"shareable_link": shareable_link}, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
