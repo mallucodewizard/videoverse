@@ -52,3 +52,38 @@ def upload_video(request):
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
+
+@api_view(['POST'])
+def trim_video(request, pk):
+    try:
+        video = Video.objects.get(pk=pk)
+    except Video.DoesNotExist:
+        return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    start_time = float(request.data.get('start_time', 0))
+    end_time = float(request.data.get('end_time', video.duration))
+
+    if start_time < 0 or end_time > video.duration or start_time >= end_time:
+        return Response({"error": "Invalid start or end time."}, status=status.HTTP_400_BAD_REQUEST)
+
+    video_path = video.file.path
+
+    # Correctly set the output directory
+    output_dir = os.path.join(settings.MEDIA_ROOT, "trimmed_videos")
+    os.makedirs(output_dir, exist_ok=True)  # Ensure directory exists
+
+    # Fix the output path to avoid duplicate folder names
+    trimmed_file_name = f"trimmed_{os.path.basename(video.file.name)}"
+    output_path = os.path.join(output_dir, trimmed_file_name)
+
+    try:
+        with VideoFileClip(video_path) as clip:
+            trimmed_clip = clip.subclip(start_time, end_time)
+            trimmed_clip.write_videofile(output_path, codec="libx264")
+    except OSError as e:
+        return Response({"error": f"FFMPEG error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    # Return the path to the trimmed video
+    return Response({"trimmed_file": output_path}, status=status.HTTP_200_OK)
+
+
