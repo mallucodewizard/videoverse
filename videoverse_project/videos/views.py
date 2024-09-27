@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.conf import settings
 from .models import Video
 from .serializers import VideoSerializer
-from moviepy.editor import VideoFileClip
+from moviepy.editor import VideoFileClip,concatenate_videoclips
 import os
 
 # Custom validation limits
@@ -87,3 +87,24 @@ def trim_video(request, pk):
     return Response({"trimmed_file": output_path}, status=status.HTTP_200_OK)
 
 
+
+@api_view(['POST'])
+def merge_videos(request):
+    video_ids = request.data.get('video_ids', [])
+
+    if not video_ids:
+        return Response({"error": "No video ids provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    clips = []
+    for video_id in video_ids:
+        try:
+            video = Video.objects.get(pk=video_id)
+            clips.append(VideoFileClip(video.file.path))
+        except Video.DoesNotExist:
+            return Response({"error": f"Video with id {video_id} not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    merged_clip = concatenate_videoclips(clips)
+    output_path = os.path.join(settings.MEDIA_ROOT, "merged_output.mp4")
+    merged_clip.write_videofile(output_path, codec="libx264")
+
+    return Response({"merged_video_url": output_path}, status=status.HTTP_200_OK)
