@@ -51,46 +51,4 @@ def upload_video(request):
 
     return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-@api_view(['POST'])
-def trim_video(request, pk):
-    try:
-        video = Video.objects.get(pk=pk)
-    except Video.DoesNotExist:
-        return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    start_time = float(request.data.get('start_time', 0))
-    end_time = float(request.data.get('end_time', video.duration))
-
-    if start_time < 0 or end_time > video.duration or start_time >= end_time:
-        return Response({"error": "Invalid start or end time."}, status=status.HTTP_400_BAD_REQUEST)
-
-    video_path = video.file.path
-    output_path = os.path.join(settings.MEDIA_ROOT, f"trimmed_{video.file.name}")
-
-    with VideoFileClip(video_path) as clip:
-        trimmed_clip = clip.subclip(start_time, end_time)
-        trimmed_clip.write_videofile(output_path, codec="libx264")
-
-    # Return path to the trimmed video
-    return Response({"trimmed_file": output_path}, status=status.HTTP_200_OK)
-
-@api_view(['POST'])
-def merge_videos(request):
-    video_ids = request.data.get('video_ids', [])
-
-    if not video_ids:
-        return Response({"error": "No video ids provided."}, status=status.HTTP_400_BAD_REQUEST)
-
-    clips = []
-    for video_id in video_ids:
-        try:
-            video = Video.objects.get(pk=video_id)
-            clips.append(VideoFileClip(video.file.path))
-        except Video.DoesNotExist:
-            return Response({"error": f"Video with id {video_id} not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    merged_clip = concatenate_videoclips(clips)
-    output_path = os.path.join(settings.MEDIA_ROOT, "merged_output.mp4")
-    merged_clip.write_videofile(output_path, codec="libx264")
-
-    return Response({"merged_video_url": output_path}, status=status.HTTP_200_OK)
