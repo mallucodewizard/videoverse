@@ -44,6 +44,6 @@ Running Tests
 1. **Prerequisites**: Lists the prerequisites needed to set up the project.
 2. **Step-by-Step Instructions**: Provides detailed steps to clone the repository, create and activate a virtual environment, install dependencies, apply migrations, and run the development server.
 3. **Additional Commands**: Includes commands for running tests and creating a superuser.
-4. **Troubleshooting**: Offers a link to the Django documentation for further assistance.
+4. **Troubleshooting**: Offers a link to the [Django documentation](https://docs.djangoproject.com/en/stable/) for further assistance.
 
 ```sh
