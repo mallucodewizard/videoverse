@@ -1,5 +1,4 @@
 # videoverse
-# videoverse
 
 ## Setup and Run the Django Project
 
