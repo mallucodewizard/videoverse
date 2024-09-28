@@ -46,7 +46,9 @@ def upload_video(request):
     if duration < MIN_DURATION_SEC or duration > MAX_DURATION_SEC:
         os.remove(temp_file_path)
         return Response({"error": "Video duration must be between 5 and 25 seconds."}, status=status.HTTP_400_BAD_REQUEST)
-
+    if not title:
+        os.remove(temp_file_path)
+        return Response({"error": "Title is required."}, status=status.HTTP_400_BAD_REQUEST)
     # Save valid video
     video = Video.objects.create(file=file, title=title, duration=duration, size=file.size)
     serializer = VideoSerializer(video)
@@ -131,6 +133,7 @@ def merge_videos(request):
 
     return Response({"merged_video_url": output_path}, status=status.HTTP_200_OK)
 
+from django.core.signing import TimestampSigner
 
 signer = TimestampSigner()
 
@@ -141,13 +144,9 @@ def generate_shareable_link(request, video_id):
     except Video.DoesNotExist:
         return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    expiry_time = request.data.get('expiry_time', 10)  # Default
-    if not expiry_time:
-        return Response({"error": "Expiry time not provided."}, status=status.HTTP_400_BAD_REQUEST)
-
     try:
-        # Generate a signed URL with the video ID and expiry time
-        signed_value = signer.sign_object({"video_id": video_id, "expiry_time": expiry_time})
+        # Sign with TimestampSigner (no need to manually add an expiry)
+        signed_value = signer.sign(video_id)
         shareable_link = f"{request.build_absolute_uri('/api/videos/access/')}{signed_value}/"
 
         return Response({"shareable_link": shareable_link}, status=status.HTTP_200_OK)
@@ -159,28 +158,16 @@ def generate_shareable_link(request, video_id):
 @api_view(['GET'])
 def access_shared_video(request, signed_value):
     try:
-        # Validate the signed value
-        data = signer.unsign_object(signed_value, max_age=60*60*24)  # 24 hours expiry
-        video_id = data.get("video_id")
-        # Get expiry_time from request or default to 10 minutes from now
-        expiry_time = request.data.get('expiry_time')
-        
-        if not expiry_time:
-            # Default expiry time is 10 minutes from now
-            expiry_time = (timezone.now() + timedelta(minutes=10)).strftime('%Y-%m-%dT%H:%M:%S')
-
-        if timezone.now() > timezone.make_aware(timezone.datetime.strptime(expiry_time, '%Y-%m-%dT%H:%M:%S')):
-            return Response({"error": "Link has expired."}, status=status.HTTP_400_BAD_REQUEST)
+        # Validate and check expiry with unsign() method from TimestampSigner
+        video_id = signer.unsign(signed_value, max_age=6)  # Set max_age to 6 seconds for testing
 
         video = Video.objects.get(pk=video_id)
         video_url = request.build_absolute_uri(video.file.url)
 
         return Response({"video_url": video_url}, status=status.HTTP_200_OK)
 
-    except SignatureExpired:
-        return Response({"error": "Link has expired."}, status=status.HTTP_400_BAD_REQUEST)
     except BadSignature:
-        return Response({"error": "Invalid link."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Link has expired."}, status=status.HTTP_400_BAD_REQUEST)
     except Video.DoesNotExist:
         return Response({"error": "Video not found."}, status=status.HTTP_404_NOT_FOUND)
     except Exception as e:
