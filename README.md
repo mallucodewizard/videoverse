@@ -46,6 +46,4 @@ Running Tests
 3. **Additional Commands**: Includes commands for running tests and creating a superuser.
 4. **Troubleshooting**: Offers a link to the Django documentation for further assistance.
 
-This [`README.md`](command:_github.copilot.openRelativePath?%5B%7B%22scheme%22%3A%22file%22%2C%22authority%22%3A%22%22%2C%22path%22%3A%22%2Fc%3A%2FUsers%2FSB%2Fvideoverse%2Fvideoverse%2FREADME.md%22%2C%22query%22%3A%22%22%2C%22fragment%22%3A%22%22%7D%2C%223b7fb23d-557d-40af-98ca-57e2c4b4cad1%22%5D "c:\Users\SB\videoverse\videoverse\README.md") should help users set up and run your Django project easily.
-
 ```sh
